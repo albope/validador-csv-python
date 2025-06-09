@@ -1,25 +1,28 @@
-# main.py (Modificado)
+# main.py
 
-import tkinter as tk
-import logging  # <-- NUEVO
+import customtkinter
+import logging
 from ui.app_ui import ValidadorCSVApp
 
 def main():
     """Punto de entrada principal de la aplicación."""
 
-    # --- NUEVO: Configuración del Logging ---
+    # --- Configuración del Logging ---
     logging.basicConfig(
-        level=logging.INFO,  # Nivel mínimo de mensajes a registrar (INFO, WARNING, ERROR, CRITICAL)
-        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', # Formato de cada línea de log
-        filename='validator.log',  # Nombre del archivo de log
-        filemode='w'  # 'w' para sobrescribir el log cada vez, 'a' para añadir (append)
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        filename='validator.log',
+        filemode='w'
     )
-    # --- FIN de la Configuración ---
-
-    logging.info("Iniciando la aplicación Validador CSV...")
+    
+    # --- Configuración de CustomTkinter ---
+    customtkinter.set_appearance_mode("System")  # Modos: "System" (default), "Dark", "Light"
+    customtkinter.set_default_color_theme("blue")  # Temas: "blue" (default), "green", "dark-blue"
+    
+    logging.info("Iniciando la aplicación Validador CSV con customtkinter...")
 
     try:
-        root = tk.Tk()
+        root = customtkinter.CTk() # Usamos la ventana principal de customtkinter
         app = ValidadorCSVApp(root)
         root.mainloop()
     except Exception as e:

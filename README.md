@@ -1,6 +1,6 @@
 # 🧪 Validador CSV Profesional
 
-![Interfaz de la Aplicación](https://i.imgur.com/kY7qW8r.png)
+![Interfaz de la Aplicación]
 
 Una aplicación de escritorio moderna y potente desarrollada en Python para validar la integridad y estructura de archivos CSV. Diseñada para ser intuitiva, rápida y funcional, esta herramienta ayuda a limpiar y preparar datos antes de su procesamiento o importación.
 
@@ -57,8 +57,7 @@ Ideal para desarrolladores y para contribuir al proyecto.
     ```bash
     pip install -r requirements.txt
     ```
-    *(Nota: deberás crear un archivo `requirements.txt` con `pip freeze > requirements.txt` que contenga `customtkinter` y `watchdog`)*.
-
+    
 4.  Ejecuta la aplicación:
     ```bash
     python main.py

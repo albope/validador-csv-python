@@ -4,14 +4,19 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 import tkinter.font as tkFont
 import threading
+import logging
 
-# Importaciones relativas y del nuevo módulo
+# Importaciones de nuestros propios módulos
 from .constants import *
 from validators import realizar_validacion_completa
+
+# Obtenemos un logger para registrar eventos específicos de la UI
+logger = logging.getLogger(__name__)
 
 class ValidadorCSVApp:
     def __init__(self, root):
         self.root = root
+        logger.info("Inicializando la clase ValidadorCSVApp.")
         self.configurar_ventana()
 
         try:
@@ -21,6 +26,7 @@ class ValidadorCSVApp:
             self.font_texto = tkFont.Font(family=FONT_FAM, size=10)
             self.font_texto_bold = tkFont.Font(family=FONT_FAM, size=10, weight="bold")
         except tk.TclError:
+            logger.warning(f"La fuente '{FONT_FAM}' no se encontró. Usando 'Arial' como alternativa.")
             self.font_titulo = tkFont.Font(family="Arial", size=16, weight="bold")
             self.font_subtitulo = tkFont.Font(family="Arial", size=11)
             self.font_stats = tkFont.Font(family="Arial", size=10, slant="italic")
@@ -94,9 +100,14 @@ class ValidadorCSVApp:
 
     def _seleccionar_archivo(self):
         ruta = filedialog.askopenfilename(title="Selecciona un archivo CSV", filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")])
-        if not ruta: return
-            
+        if not ruta:
+            logger.warning("El usuario canceló la selección de archivo.")
+            return
+        
+        logger.info(f"Archivo seleccionado por el usuario: {ruta}")
+        
         expected_headers = [h.strip() for h in self.entry_header.get().split(',') if h]
+        
         validation_options = {
             'check_vacias': self.var_check_vacias.get(),
             'check_duplicadas': self.var_check_duplicadas.get(),
@@ -104,6 +115,8 @@ class ValidadorCSVApp:
             'ignore_case': self.var_ignore_case.get(),
             'expected_headers': expected_headers
         }
+        
+        logger.info(f"Opciones de validación seleccionadas: {validation_options}")
 
         self.select_button.config(state="disabled")
         self.ruta_label.config(text=f"📂 Procesando archivo:\n{ruta}")
@@ -111,23 +124,30 @@ class ValidadorCSVApp:
         self.progressbar.pack(fill='x', padx=20, pady=5)
         self.progressbar.start(10)
 
+        logger.info("Iniciando hilo de validación...")
         self.validation_thread = threading.Thread(target=self._worker_validacion, args=(ruta, validation_options))
         self.validation_thread.start()
         self.root.after(100, self._verificar_hilo)
 
     def _worker_validacion(self, ruta_csv, options):
-        """El trabajador ahora llama a la función de validación importada."""
+        logger.info(f"El hilo de trabajo ha comenzado la validación para: {ruta_csv}")
         self.resultados_validacion = realizar_validacion_completa(ruta_csv, options)
+        logger.info(f"El hilo de trabajo ha finalizado la validación.")
 
     def _verificar_hilo(self):
         if self.validation_thread.is_alive():
             self.root.after(100, self._verificar_hilo)
         else:
+            logger.info("El hilo de trabajo ha sido verificado como finalizado. Mostrando resultados.")
             self.progressbar.stop()
             self.progressbar.pack_forget()
             self.select_button.config(state="normal")
-            self.ruta_label.config(text=f"📂 Archivo analizado:\n{self.resultados_validacion['ruta_archivo']}")
-            self._mostrar_resultados()
+            if self.resultados_validacion:
+                self.ruta_label.config(text=f"📂 Archivo analizado:\n{self.resultados_validacion['ruta_archivo']}")
+                self._mostrar_resultados()
+            else:
+                logger.error("El hilo de validación terminó pero no se encontraron resultados.")
+                messagebox.showerror("Error", "La validación terminó inesperadamente sin resultados.")
             
     def _limpiar_resultados(self):
         self.salida_texto.config(state='normal')
@@ -139,6 +159,10 @@ class ValidadorCSVApp:
         self.salida_texto.config(state='normal')
         self.salida_texto.delete(1.0, tk.END)
         res = self.resultados_validacion
+        if not res:
+            logger.error("Se intentó mostrar resultados, pero el diccionario de resultados está vacío.")
+            return
+
         if res.get('error_lectura'):
             self.estadisticas_label.config(text="📊 Error al procesar el archivo")
             self.salida_texto.insert(tk.END, f"Error Crítico:\n{res['error_lectura']}", "error")
@@ -185,11 +209,21 @@ class ValidadorCSVApp:
         self.salida_texto.config(state='disabled')
 
     def _exportar_informe(self):
-        if not self.resultados_validacion: messagebox.showinfo("Información", "Primero debes seleccionar y validar un archivo."); return
+        if not self.resultados_validacion:
+            messagebox.showinfo("Información", "Primero debes seleccionar y validar un archivo.")
+            return
+
         has_errors = any([self.resultados_validacion.get(key) for key in ['filas_invalidas', 'celdas_con_saltos', 'error_lectura', 'filas_vacias', 'filas_duplicadas', 'error_header']])
-        if not has_errors: messagebox.showinfo("¡Todo correcto!", "El archivo está perfectamente validado. No hay errores que exportar."); return
+        if not has_errors:
+            messagebox.showinfo("¡Todo correcto!", "El archivo está perfectamente validado. No hay errores que exportar.")
+            return
+            
         ruta_guardado = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Archivos de texto", "*.txt")], title="Guardar informe de errores")
-        if not ruta_guardado: return
+        if not ruta_guardado:
+            logger.warning("El usuario canceló la exportación del informe.")
+            return
+        
+        logger.info(f"Exportando informe a: {ruta_guardado}")
         try:
             with open(ruta_guardado, "w", encoding="utf-8") as f:
                 f.write("="*50 + "\nINFORME DE VALIDACIÓN DE ARCHIVO CSV\n" + "="*50 + "\n")
@@ -197,9 +231,13 @@ class ValidadorCSVApp:
                 f.write(f"RESUMEN ESTADÍSTICO:\n{self.estadisticas_label.cget('text')}\n\n")
                 f.write(self.salida_texto.get("1.0", tk.END))
             messagebox.showinfo("Exportado", f"Informe de errores guardado en:\n{ruta_guardado}")
-        except Exception as e: messagebox.showerror("Error al exportar", f"No se pudo guardar el archivo:\n{e}")
+            logger.info("Informe exportado con éxito.")
+        except Exception:
+            logger.error("Error durante la exportación del informe.", exc_info=True)
+            messagebox.showerror("Error al exportar", f"No se pudo guardar el archivo. Revise 'validator.log' para detalles.")
 
     def _limpiar(self):
+        logger.info("Limpiando la interfaz de usuario.")
         self._limpiar_resultados()
         self.ruta_label.config(text="📂 Archivo: (ninguno seleccionado)")
         self.estadisticas_label.config(text="📊 Selecciona un archivo para ver las estadísticas")

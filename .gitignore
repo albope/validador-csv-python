@@ -5,3 +5,6 @@ __pycache__/
 # Carpetas de entorno virtual
 venv/
 .venv/
+
+# Archivos de log generados
+validator.log

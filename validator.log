@@ -1,3 +1,0 @@
-2025-06-09 16:56:32,302 - INFO - root - Iniciando la aplicación Validador CSV con customtkinter...
-2025-06-09 16:56:32,431 - INFO - ui.app_ui - Inicializando la clase ValidadorCSVApp con customtkinter.
-2025-06-09 16:56:32,907 - INFO - ui.app_ui - Actualizando el tema del Treeview a: Light

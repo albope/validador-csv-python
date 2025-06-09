@@ -1,7 +1,5 @@
 # 🧪 Validador CSV Profesional
 
-![Interfaz de la Aplicación]
-
 Una aplicación de escritorio moderna y potente desarrollada en Python para validar la integridad y estructura de archivos CSV. Diseñada para ser intuitiva, rápida y funcional, esta herramienta ayuda a limpiar y preparar datos antes de su procesamiento o importación.
 
 Desarrollado por **albope**.

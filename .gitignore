@@ -8,3 +8,7 @@ venv/
 
 # Archivos de log generados
 validator.log
+# Archivos y carpetas de PyInstaller
+/build/
+/dist/
+*.spec

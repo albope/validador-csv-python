@@ -1,18 +1,13 @@
-# -*- coding: utf--8 -*-
+# ui/app_ui.py
 
-import csv
-import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 import tkinter.font as tkFont
 import threading
 
-# --- Constantes de configuración de la UI ---
-COLOR_BG = "#f2f2f2"
-COLOR_FG = "#333333"
-COLOR_ERROR = "red"
-COLOR_SUCCESS = "#008000"
-FONT_FAM = "Segoe UI"
+# Importaciones relativas y del nuevo módulo
+from .constants import *
+from validators import realizar_validacion_completa
 
 class ValidadorCSVApp:
     def __init__(self, root):
@@ -121,7 +116,8 @@ class ValidadorCSVApp:
         self.root.after(100, self._verificar_hilo)
 
     def _worker_validacion(self, ruta_csv, options):
-        self.resultados_validacion = self._realizar_validacion(ruta_csv, options)
+        """El trabajador ahora llama a la función de validación importada."""
+        self.resultados_validacion = realizar_validacion_completa(ruta_csv, options)
 
     def _verificar_hilo(self):
         if self.validation_thread.is_alive():
@@ -138,85 +134,8 @@ class ValidadorCSVApp:
         self.salida_texto.delete(1.0, tk.END)
         self.salida_texto.config(state='disabled')
         self.estadisticas_label.config(text="📊 Calculando estadísticas...")
-
-    def _realizar_validacion(self, ruta_csv, options):
-        resultados = {
-            'ruta_archivo': ruta_csv, 'total_filas': 0, 'num_columnas_esperadas': None,
-            'filas_invalidas': [], 'celdas_con_saltos': [], 'error_lectura': None,
-            'filas_vacias': [], 'filas_duplicadas': {}, 'error_header': None
-        }
-        seen_rows_and_lines = {}
-
-        try:
-            with open(ruta_csv, 'r', newline='', encoding='utf-8') as f:
-                lector = csv.reader(f)
-                
-                try:
-                    primera_fila = next(lector)
-                    resultados['total_filas'] = 1
-                    
-                    header_to_validate = primera_fila
-                    expected_headers = options['expected_headers']
-                    if options['check_header'] and expected_headers:
-                        if options['ignore_case']:
-                            header_to_validate = [h.lower().strip() for h in header_to_validate]
-                            expected_headers = [h.lower().strip() for h in expected_headers]
-                        
-                        if header_to_validate != expected_headers:
-                            resultados['error_header'] = f"La cabecera no coincide.\nSe esperaba: {options['expected_headers']}\nSe encontró: {primera_fila}"
-                    
-                    resultados['num_columnas_esperadas'] = len(primera_fila)
-                    self._validar_fila(primera_fila, 1, resultados, options, seen_rows_and_lines)
-
-                except StopIteration:
-                    return resultados
-
-                for i, fila in enumerate(lector, start=2):
-                    resultados['total_filas'] += 1
-                    self._validar_fila(fila, i, resultados, options, seen_rows_and_lines)
-
-        except Exception as e:
-            resultados['error_lectura'] = f"Error inesperado al leer el archivo: {e}"
-        
-        if options['check_duplicadas']:
-            for row, lines in seen_rows_and_lines.items():
-                if len(lines) > 1:
-                    resultados['filas_duplicadas'][row] = sorted(lines)
-                
-        return resultados
-
-    def _validar_fila(self, fila, num_fila, resultados, options, seen_rows_and_lines):
-        """Valida una única fila aplicando las reglas activas."""
-        
-        # --- CORRECCIÓN CLAVE: Salida anticipada si la estructura de la fila es incorrecta ---
-        if len(fila) != resultados['num_columnas_esperadas']:
-            resultados['filas_invalidas'].append((num_fila, len(fila), fila))
-            return # Si el número de columnas es incorrecto, no se realizan más validaciones en esta fila.
-
-        # Comprobar si la fila está vacía (ahora se hace después de la comprobación de columnas)
-        if options['check_vacias'] and not any(field.strip() for field in fila):
-            resultados['filas_vacias'].append(num_fila)
-            return
-        
-        # Comprobar saltos de línea internos
-        for j, campo in enumerate(fila, start=1):
-            if '\n' in campo or '\r' in campo:
-                resultados['celdas_con_saltos'].append((num_fila, j, campo))
-        
-        # Lógica de duplicados (ahora solo se ejecuta en filas estructuralmente válidas)
-        if options['check_duplicadas']:
-            normalized_fila = [field.strip() for field in fila]
-            if options['ignore_case']:
-                normalized_fila = [field.lower() for field in normalized_fila]
-            
-            row_tuple = tuple(normalized_fila)
-            
-            if row_tuple not in seen_rows_and_lines:
-                seen_rows_and_lines[row_tuple] = []
-            seen_rows_and_lines[row_tuple].append(num_fila)
-
+    
     def _mostrar_resultados(self):
-        # (Sin cambios respecto a la versión anterior, ya era correcta)
         self.salida_texto.config(state='normal')
         self.salida_texto.delete(1.0, tk.END)
         res = self.resultados_validacion
@@ -225,16 +144,18 @@ class ValidadorCSVApp:
             self.salida_texto.insert(tk.END, f"Error Crítico:\n{res['error_lectura']}", "error")
             self.salida_texto.config(state='disabled')
             return
+
         stats_text = (f"📊 Total filas: {res.get('total_filas', 0)} | "
                       f"❌ Columnas: {len(res.get('filas_invalidas', []))} | "
                       f"❌ Saltos: {len(res.get('celdas_con_saltos', []))} | "
                       f"❌ Vacías: {len(res.get('filas_vacias', []))} | "
                       f"❌ Duplicadas: {len(res.get('filas_duplicadas', {}))}")
         self.estadisticas_label.config(text=stats_text)
+        
         if res.get('error_header'):
-            self.salida_texto.insert(tk.END, "Validación de Cabecera\n\n", "info")
+            self.salida_texto.insert(tk.END, "1. Validación de Cabecera\n\n", "info")
             self.salida_texto.insert(tk.END, f"⛔ {res['error_header']}\n\n", "error")
-        self.salida_texto.insert(tk.END, "Validación de Número de Columnas\n\n", "info")
+        self.salida_texto.insert(tk.END, "2. Validación de Número de Columnas\n\n", "info")
         if not res.get('filas_invalidas'):
             msg = f"✅ Todas las filas tienen el número esperado de columnas ({res.get('num_columnas_esperadas', 'N/A')}).\n\n"
             self.salida_texto.insert(tk.END, msg, "ok")
@@ -243,7 +164,7 @@ class ValidadorCSVApp:
             self.salida_texto.insert(tk.END, msg, "error")
             for fila_num, num_cols, contenido in res['filas_invalidas']:
                 self.salida_texto.insert(tk.END, f"Fila {fila_num}: tiene {num_cols} columnas\n   Contenido: {contenido}\n\n")
-        self.salida_texto.insert(tk.END, "Validación de Saltos de Línea Internos\n\n", "info")
+        self.salida_texto.insert(tk.END, "3. Validación de Saltos de Línea Internos\n\n", "info")
         if not res.get('celdas_con_saltos'):
              self.salida_texto.insert(tk.END, "✅ Ninguna celda contiene saltos de línea internos.\n\n", "ok")
         else:
@@ -252,18 +173,18 @@ class ValidadorCSVApp:
                 resumen = contenido.replace('\n', r'{\n}').replace('\r', r'{\r}')
                 self.salida_texto.insert(tk.END, f"- Fila {fila_num}, Columna {col_num}:\n   Contenido: {resumen}\n\n")
         if res.get('filas_vacias'):
-            self.salida_texto.insert(tk.END, "Detección de Filas Vacías\n\n", "info")
+            self.salida_texto.insert(tk.END, "4. Detección de Filas Vacías\n\n", "info")
             self.salida_texto.insert(tk.END, f"⚠️ Se encontraron filas vacías en las líneas: {', '.join(map(str, res['filas_vacias']))}\n\n", "error")
         if res.get('filas_duplicadas'):
-            self.salida_texto.insert(tk.END, "Detección de Filas Duplicadas\n\n", "info")
+            self.salida_texto.insert(tk.END, "5. Detección de Filas Duplicadas\n\n", "info")
             self.salida_texto.insert(tk.END, "⚠️ Se encontraron los siguientes grupos de filas duplicadas:\n\n", "error")
             for row_tuple, line_numbers in res['filas_duplicadas'].items():
                 self.salida_texto.insert(tk.END, f"Contenido duplicado encontrado en las filas {', '.join(map(str, line_numbers))}:\n")
                 self.salida_texto.insert(tk.END, f"   {list(row_tuple)}\n\n")
+        
         self.salida_texto.config(state='disabled')
 
     def _exportar_informe(self):
-        # (Sin cambios)
         if not self.resultados_validacion: messagebox.showinfo("Información", "Primero debes seleccionar y validar un archivo."); return
         has_errors = any([self.resultados_validacion.get(key) for key in ['filas_invalidas', 'celdas_con_saltos', 'error_lectura', 'filas_vacias', 'filas_duplicadas', 'error_header']])
         if not has_errors: messagebox.showinfo("¡Todo correcto!", "El archivo está perfectamente validado. No hay errores que exportar."); return
@@ -279,7 +200,6 @@ class ValidadorCSVApp:
         except Exception as e: messagebox.showerror("Error al exportar", f"No se pudo guardar el archivo:\n{e}")
 
     def _limpiar(self):
-        # (Sin cambios)
         self._limpiar_resultados()
         self.ruta_label.config(text="📂 Archivo: (ninguno seleccionado)")
         self.estadisticas_label.config(text="📊 Selecciona un archivo para ver las estadísticas")
@@ -289,8 +209,3 @@ class ValidadorCSVApp:
         self.var_check_duplicadas.set(True)
         self.var_ignore_case.set(False)
         self._toggle_header_entry()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = ValidadorCSVApp(root)
-    root.mainloop()

@@ -10,7 +10,6 @@ import logging
 from .constants import *
 from validators import realizar_validacion_completa
 
-# Obtenemos un logger para registrar eventos específicos de la UI
 logger = logging.getLogger(__name__)
 
 class ValidadorCSVApp:
@@ -35,28 +34,38 @@ class ValidadorCSVApp:
 
         self.validation_thread = None
         self.resultados_validacion = None
+        self.treeview_sort_column = None
+        self.treeview_sort_reverse = False
 
         self._crear_widgets()
 
     def configurar_ventana(self):
         self.root.title("🧪 Validador CSV Profesional")
-        self.root.geometry("900x850")
+        self.root.geometry("950x900")
         self.root.configure(bg=COLOR_BG)
-        self.root.minsize(700, 600)
+        self.root.minsize(800, 600)
 
     def _crear_widgets(self):
-        tk.Label(self.root, text="🧪 Validador de CSV con revisión avanzada", font=self.font_titulo, bg=COLOR_BG, fg=COLOR_FG).pack(pady=(15, 0))
-        tk.Label(self.root, text="Comprueba saltos de línea, columnas, duplicados y más", font=self.font_subtitulo, bg=COLOR_BG, fg="#555").pack(pady=(0, 10))
+        # --- Contenedor principal ---
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        boton_frame = tk.Frame(self.root, bg=COLOR_BG)
+        # --- Frame superior para controles ---
+        top_frame = tk.Frame(main_frame, bg=COLOR_BG)
+        top_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(top_frame, text="🧪 Validador de CSV con revisión avanzada", font=self.font_titulo, bg=COLOR_BG, fg=COLOR_FG).pack(pady=(5, 0))
+        tk.Label(top_frame, text="Comprueba saltos de línea, columnas, duplicados y más", font=self.font_subtitulo, bg=COLOR_BG, fg="#555").pack(pady=(0, 10))
+
+        boton_frame = tk.Frame(top_frame, bg=COLOR_BG)
         boton_frame.pack(pady=5)
         self.select_button = tk.Button(boton_frame, text="📂 Seleccionar y Validar", command=self._seleccionar_archivo, bg="#e0e0e0", padx=10, pady=5)
         self.select_button.grid(row=0, column=0, padx=10)
         tk.Button(boton_frame, text="💾 Exportar informe", command=self._exportar_informe, bg="#e0e0e0", padx=10, pady=5).grid(row=0, column=1, padx=10)
         tk.Button(boton_frame, text="🔄 Limpiar todo", command=self._limpiar, bg="#e0e0e0", padx=10, pady=5).grid(row=0, column=2, padx=10)
         
-        options_frame = tk.LabelFrame(self.root, text="Opciones de Validación Avanzada", padx=10, pady=10, bg=COLOR_BG, font=self.font_texto_bold)
-        options_frame.pack(padx=20, pady=10, fill='x')
+        options_frame = tk.LabelFrame(top_frame, text="Opciones de Validación Avanzada", padx=10, pady=10, bg=COLOR_BG, font=self.font_texto_bold)
+        options_frame.pack(padx=10, pady=10, fill='x')
 
         self.var_check_vacias = tk.BooleanVar(value=True)
         self.var_check_duplicadas = tk.BooleanVar(value=True)
@@ -64,36 +73,79 @@ class ValidadorCSVApp:
         self.var_ignore_case = tk.BooleanVar(value=False)
 
         ttk.Checkbutton(options_frame, text="Detectar filas vacías", variable=self.var_check_vacias).grid(row=0, column=0, sticky='w', padx=5)
-        
         dup_frame = tk.Frame(options_frame, bg=COLOR_BG)
         dup_frame.grid(row=0, column=1, sticky='w')
         ttk.Checkbutton(dup_frame, text="Detectar filas duplicadas", variable=self.var_check_duplicadas).pack(side='left')
         ttk.Checkbutton(dup_frame, text="(Ignorar Mayús/Minús)", variable=self.var_ignore_case).pack(side='left', padx=5)
-        
         header_check = ttk.Checkbutton(options_frame, text="Validar cabecera (separada por comas):", variable=self.var_check_header, command=self._toggle_header_entry)
         header_check.grid(row=1, column=0, sticky='w', padx=5, pady=5)
-        
         self.entry_header = ttk.Entry(options_frame, width=60, state='disabled')
         self.entry_header.grid(row=1, column=1, sticky='w', padx=5, pady=5)
 
-        self.ruta_label = tk.Label(self.root, text="📂 Archivo: (ninguno seleccionado)", font=self.font_texto, wraplength=850, justify="center", bg=COLOR_BG, fg=COLOR_FG)
-        self.ruta_label.pack(pady=(10, 5), padx=20)
+        self.ruta_label = tk.Label(top_frame, text="📂 Archivo: (ninguno seleccionado)", font=self.font_texto, wraplength=850, justify="center", bg=COLOR_BG, fg=COLOR_FG)
+        self.ruta_label.pack(pady=5, padx=20)
         
-        self.progressbar = ttk.Progressbar(self.root, mode='indeterminate')
+        self.progressbar = ttk.Progressbar(top_frame, mode='indeterminate')
+        self.progressbar.pack(fill='x', padx=20, pady=5)
+        self.progressbar.pack_forget() # Ocultarla al inicio
 
-        self.estadisticas_label = tk.Label(self.root, text="📊 Selecciona un archivo para ver las estadísticas", font=self.font_stats, bg=COLOR_BG, fg="#555")
+        self.estadisticas_label = tk.Label(top_frame, text="📊 Selecciona un archivo para ver las estadísticas", font=self.font_stats, bg=COLOR_BG, fg="#555")
         self.estadisticas_label.pack(pady=5)
 
-        output_frame = tk.Frame(self.root, bd=1, relief="sunken")
-        output_frame.pack(padx=20, pady=10, expand=True, fill="both")
+        # --- NUEVO: Frame para el Treeview ---
+        tree_frame = tk.Frame(main_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        self.salida_texto = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, font=self.font_texto, relief="flat")
-        self.salida_texto.pack(expand=True, fill="both")
-        
-        self.salida_texto.tag_config("error", foreground=COLOR_ERROR, font=self.font_texto_bold)
-        self.salida_texto.tag_config("ok", foreground=COLOR_SUCCESS, font=self.font_texto_bold)
-        self.salida_texto.tag_config("info", foreground="#444", font=self.font_texto_bold)
-        self.salida_texto.config(state='disabled')
+        columns = ('linea', 'tipo_error', 'descripcion', 'contenido')
+        self.results_tree = ttk.Treeview(tree_frame, columns=columns, show='headings')
+
+        # Definir cabeceras y funcionalidad de ordenación
+        self.results_tree.heading('linea', text='Línea', command=lambda: self._sort_treeview_column('linea', False))
+        self.results_tree.heading('tipo_error', text='Tipo de Error', command=lambda: self._sort_treeview_column('tipo_error', False))
+        self.results_tree.heading('descripcion', text='Descripción', command=lambda: self._sort_treeview_column('descripcion', False))
+        self.results_tree.heading('contenido', text='Contenido de la Fila', command=lambda: self._sort_treeview_column('contenido', False))
+
+        # Definir anchos de columna
+        self.results_tree.column('linea', width=80, stretch=tk.NO, anchor='center')
+        self.results_tree.column('tipo_error', width=150, stretch=tk.NO)
+        self.results_tree.column('descripcion', width=300)
+        self.results_tree.column('contenido', width=500)
+
+        # Añadir Scrollbars
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.results_tree.yview)
+        hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.results_tree.xview)
+        self.results_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        vsb.pack(side='right', fill='y')
+        hsb.pack(side='bottom', fill='x')
+        self.results_tree.pack(side='left', fill='both', expand=True)
+
+    def _sort_treeview_column(self, col, reverse):
+        """Función para ordenar las columnas del Treeview al hacer clic."""
+        try:
+            # Obtener los datos de la columna como una lista de tuplas (valor, item_id)
+            data_list = [(self.results_tree.set(k, col), k) for k in self.results_tree.get_children('')]
+            
+            # Determinar la clave de ordenación (numérica para línea, texto para el resto)
+            key_func = lambda t: t[0]
+            if col == 'linea':
+                # Intentar convertir a entero para ordenación numérica correcta
+                try:
+                    key_func = lambda t: int(t[0])
+                except (ValueError, TypeError):
+                    pass # Si falla, se ordena como texto
+
+            data_list.sort(key=key_func, reverse=reverse)
+
+            # Reorganizar los items en el treeview
+            for index, (val, k) in enumerate(data_list):
+                self.results_tree.move(k, '', index)
+
+            # Invertir el orden para el próximo clic en la misma columna
+            self.results_tree.heading(col, command=lambda: self._sort_treeview_column(col, not reverse))
+        except Exception as e:
+            logger.error(f"Error al ordenar la columna {col}: {e}")
+
 
     def _toggle_header_entry(self):
         self.entry_header.config(state='normal' if self.var_check_header.get() else 'disabled')
@@ -139,7 +191,6 @@ class ValidadorCSVApp:
             self.root.after(100, self._verificar_hilo)
         else:
             logger.info("El hilo de trabajo ha sido verificado como finalizado. Mostrando resultados.")
-            self.progressbar.stop()
             self.progressbar.pack_forget()
             self.select_button.config(state="normal")
             if self.resultados_validacion:
@@ -150,14 +201,12 @@ class ValidadorCSVApp:
                 messagebox.showerror("Error", "La validación terminó inesperadamente sin resultados.")
             
     def _limpiar_resultados(self):
-        self.salida_texto.config(state='normal')
-        self.salida_texto.delete(1.0, tk.END)
-        self.salida_texto.config(state='disabled')
+        """Limpia la tabla de resultados y las estadísticas."""
+        self.results_tree.delete(*self.results_tree.get_children())
         self.estadisticas_label.config(text="📊 Calculando estadísticas...")
     
     def _mostrar_resultados(self):
-        self.salida_texto.config(state='normal')
-        self.salida_texto.delete(1.0, tk.END)
+        self._limpiar_resultados() # Limpiamos antes de mostrar
         res = self.resultados_validacion
         if not res:
             logger.error("Se intentó mostrar resultados, pero el diccionario de resultados está vacío.")
@@ -165,8 +214,7 @@ class ValidadorCSVApp:
 
         if res.get('error_lectura'):
             self.estadisticas_label.config(text="📊 Error al procesar el archivo")
-            self.salida_texto.insert(tk.END, f"Error Crítico:\n{res['error_lectura']}", "error")
-            self.salida_texto.config(state='disabled')
+            messagebox.showerror("Error de Lectura", res['error_lectura'])
             return
 
         stats_text = (f"📊 Total filas: {res.get('total_filas', 0)} | "
@@ -176,37 +224,24 @@ class ValidadorCSVApp:
                       f"❌ Duplicadas: {len(res.get('filas_duplicadas', {}))}")
         self.estadisticas_label.config(text=stats_text)
         
+        # Insertar errores en el Treeview
         if res.get('error_header'):
-            self.salida_texto.insert(tk.END, "1. Validación de Cabecera\n\n", "info")
-            self.salida_texto.insert(tk.END, f"⛔ {res['error_header']}\n\n", "error")
-        self.salida_texto.insert(tk.END, "2. Validación de Número de Columnas\n\n", "info")
-        if not res.get('filas_invalidas'):
-            msg = f"✅ Todas las filas tienen el número esperado de columnas ({res.get('num_columnas_esperadas', 'N/A')}).\n\n"
-            self.salida_texto.insert(tk.END, msg, "ok")
-        else:
-            msg = f"⚠️ Se esperaba {res.get('num_columnas_esperadas', 'N/A')} columnas, pero se encontraron filas con un número diferente:\n\n"
-            self.salida_texto.insert(tk.END, msg, "error")
-            for fila_num, num_cols, contenido in res['filas_invalidas']:
-                self.salida_texto.insert(tk.END, f"Fila {fila_num}: tiene {num_cols} columnas\n   Contenido: {contenido}\n\n")
-        self.salida_texto.insert(tk.END, "3. Validación de Saltos de Línea Internos\n\n", "info")
-        if not res.get('celdas_con_saltos'):
-             self.salida_texto.insert(tk.END, "✅ Ninguna celda contiene saltos de línea internos.\n\n", "ok")
-        else:
-            self.salida_texto.insert(tk.END, "⚠️ Se encontraron celdas con saltos de línea internos:\n\n", "error")
-            for fila_num, col_num, contenido in res['celdas_con_saltos']:
-                resumen = contenido.replace('\n', r'{\n}').replace('\r', r'{\r}')
-                self.salida_texto.insert(tk.END, f"- Fila {fila_num}, Columna {col_num}:\n   Contenido: {resumen}\n\n")
-        if res.get('filas_vacias'):
-            self.salida_texto.insert(tk.END, "4. Detección de Filas Vacías\n\n", "info")
-            self.salida_texto.insert(tk.END, f"⚠️ Se encontraron filas vacías en las líneas: {', '.join(map(str, res['filas_vacias']))}\n\n", "error")
-        if res.get('filas_duplicadas'):
-            self.salida_texto.insert(tk.END, "5. Detección de Filas Duplicadas\n\n", "info")
-            self.salida_texto.insert(tk.END, "⚠️ Se encontraron los siguientes grupos de filas duplicadas:\n\n", "error")
-            for row_tuple, line_numbers in res['filas_duplicadas'].items():
-                self.salida_texto.insert(tk.END, f"Contenido duplicado encontrado en las filas {', '.join(map(str, line_numbers))}:\n")
-                self.salida_texto.insert(tk.END, f"   {list(row_tuple)}\n\n")
-        
-        self.salida_texto.config(state='disabled')
+            self.results_tree.insert('', 'end', values=('-', 'Cabecera', res['error_header'], ''))
+
+        for fila_num, num_cols, contenido in res.get('filas_invalidas', []):
+            desc = f"Se esperaban {res.get('num_columnas_esperadas')} columnas, pero tiene {num_cols}"
+            self.results_tree.insert('', 'end', values=(fila_num, 'Nº de Columnas', desc, str(contenido)))
+
+        for fila_num, col_num, contenido in res.get('celdas_con_saltos', []):
+            desc = f"Salto de línea encontrado en la columna {col_num}"
+            self.results_tree.insert('', 'end', values=(fila_num, 'Salto de Línea', desc, contenido.replace('\n', r'{\n}')))
+
+        for fila_num in res.get('filas_vacias', []):
+            self.results_tree.insert('', 'end', values=(fila_num, 'Fila Vacía', 'La fila no contiene datos', ''))
+
+        for row_tuple, line_numbers in res.get('filas_duplicadas', {}).items():
+            desc = f"Aparece en las líneas: {', '.join(map(str, line_numbers))}"
+            self.results_tree.insert('', 'end', values=(line_numbers[0], 'Fila Duplicada', desc, str(list(row_tuple))))
 
     def _exportar_informe(self):
         if not self.resultados_validacion:
@@ -226,10 +261,40 @@ class ValidadorCSVApp:
         logger.info(f"Exportando informe a: {ruta_guardado}")
         try:
             with open(ruta_guardado, "w", encoding="utf-8") as f:
-                f.write("="*50 + "\nINFORME DE VALIDACIÓN DE ARCHIVO CSV\n" + "="*50 + "\n")
-                f.write(f"Archivo: {self.resultados_validacion['ruta_archivo']}\n\n")
+                res = self.resultados_validacion
+                f.write("="*80 + "\nINFORME DE VALIDACIÓN DE ARCHIVO CSV\n" + "="*80 + "\n")
+                f.write(f"Archivo: {res['ruta_archivo']}\n\n")
                 f.write(f"RESUMEN ESTADÍSTICO:\n{self.estadisticas_label.cget('text')}\n\n")
-                f.write(self.salida_texto.get("1.0", tk.END))
+                
+                f.write("-" * 80 + "\nDETALLE DE ERRORES\n" + "-"*80 + "\n\n")
+
+                if res.get('error_header'):
+                    f.write("--- ERROR DE CABECERA ---\n")
+                    f.write(f"{res['error_header']}\n\n")
+
+                if res.get('filas_invalidas'):
+                    f.write("--- ERRORES DE NÚMERO DE COLUMNAS ---\n")
+                    for fila_num, num_cols, contenido in res['filas_invalidas']:
+                        f.write(f"Línea {fila_num}: Se esperaban {res.get('num_columnas_esperadas')} columnas, pero tiene {num_cols}. Contenido: {contenido}\n")
+                    f.write("\n")
+                
+                if res.get('celdas_con_saltos'):
+                    f.write("--- ERRORES DE SALTOS DE LÍNEA ---\n")
+                    for fila_num, col_num, contenido in res['celdas_con_saltos']:
+                        f.write(f"Línea {fila_num}, Columna {col_num}: Contenido con salto de línea: {contenido.replace(chr(10), '{LF}')}\n")
+                    f.write("\n")
+
+                if res.get('filas_vacias'):
+                    f.write("--- FILAS VACÍAS ENCONTRADAS ---\n")
+                    f.write(f"Líneas: {', '.join(map(str, res['filas_vacias']))}\n\n")
+
+                if res.get('filas_duplicadas'):
+                    f.write("--- GRUPOS DE FILAS DUPLICADAS ---\n")
+                    for row_tuple, line_numbers in res['filas_duplicadas'].items():
+                        f.write(f"Contenido duplicado en líneas {', '.join(map(str, line_numbers))}:\n")
+                        f.write(f"   {list(row_tuple)}\n")
+                    f.write("\n")
+
             messagebox.showinfo("Exportado", f"Informe de errores guardado en:\n{ruta_guardado}")
             logger.info("Informe exportado con éxito.")
         except Exception:

@@ -1,10 +1,2 @@
-2025-06-09 16:36:58,662 - INFO - root - Iniciando la aplicación Validador CSV...
-2025-06-09 16:36:58,733 - INFO - ui.app_ui - Inicializando la clase ValidadorCSVApp.
-2025-06-09 16:37:04,551 - INFO - ui.app_ui - Archivo seleccionado por el usuario: C:/Users/abort/Downloads/OneDrive_1_2-6-2025/Transacciones_Ticketing_14-05-2025.csv
-2025-06-09 16:37:04,551 - INFO - ui.app_ui - Opciones de validación seleccionadas: {'check_vacias': True, 'check_duplicadas': True, 'check_header': False, 'ignore_case': False, 'expected_headers': []}
-2025-06-09 16:37:04,552 - INFO - ui.app_ui - Iniciando hilo de validación...
-2025-06-09 16:37:04,555 - INFO - ui.app_ui - El hilo de trabajo ha comenzado la validación para: C:/Users/abort/Downloads/OneDrive_1_2-6-2025/Transacciones_Ticketing_14-05-2025.csv
-2025-06-09 16:37:04,555 - INFO - validators - Iniciando validación para el fichero: C:/Users/abort/Downloads/OneDrive_1_2-6-2025/Transacciones_Ticketing_14-05-2025.csv
-2025-06-09 16:37:05,137 - INFO - validators - Validación finalizada. Devolviendo resultados.
-2025-06-09 16:37:05,162 - INFO - ui.app_ui - El hilo de trabajo ha finalizado la validación.
-2025-06-09 16:37:05,173 - INFO - ui.app_ui - El hilo de trabajo ha sido verificado como finalizado. Mostrando resultados.
+2025-06-09 16:42:13,844 - INFO - root - Iniciando la aplicación Validador CSV...
+2025-06-09 16:42:13,930 - INFO - ui.app_ui - Inicializando la clase ValidadorCSVApp.

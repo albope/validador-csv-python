@@ -6,6 +6,31 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# --- NUEVA FUNCIÓN ---
+def leer_primeras_lineas(ruta_csv, num_lineas, encoding):
+    """
+    Lee las primeras N líneas de un archivo CSV para previsualización.
+    Devuelve la cabecera y una lista de filas.
+    """
+    logger.info(f"Leyendo primeras {num_lineas} líneas de {ruta_csv} con codificación {encoding}")
+    header = []
+    preview_rows = []
+    try:
+        with open(ruta_csv, 'r', newline='', encoding=encoding) as f:
+            lector = csv.reader(f)
+            # Leer la cabecera
+            header = next(lector, [])
+            # Leer las siguientes N-1 filas
+            for i, row in enumerate(lector):
+                if i >= num_lineas - 1:
+                    break
+                preview_rows.append(row)
+        return {'exito': True, 'header': header, 'rows': preview_rows}
+    except Exception as e:
+        logger.error(f"Error al previsualizar el archivo {ruta_csv}: {e}")
+        return {'exito': False, 'error': str(e)}
+
+
 def realizar_validacion_completa(ruta_csv, options):
     """
     Lógica de validación pura que ahora usa la codificación proporcionada.
@@ -105,16 +130,13 @@ def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options
     
     lineas_a_omitir = set()
     
-    # Añadir las líneas vacías
     filas_vacias = resultados_validacion.get('filas_vacias', [])
     lineas_a_omitir.update(filas_vacias)
     
-    # --- CORRECCIÓN: Añadir las líneas con número de columnas incorrecto ---
     filas_invalidas = resultados_validacion.get('filas_invalidas', [])
     for linea_invalida, _, _ in filas_invalidas:
         lineas_a_omitir.add(linea_invalida)
     
-    # Añadir las líneas duplicadas (todas menos la primera aparición)
     filas_duplicadas = resultados_validacion.get('filas_duplicadas', {})
     duplicados_eliminados = 0
     for lines in filas_duplicadas.values():
@@ -142,7 +164,7 @@ def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options
             'exito': True,
             'vacias_eliminadas': len(filas_vacias),
             'duplicados_eliminados': duplicados_eliminados,
-            'formato_incorrecto_eliminadas': len(filas_invalidas), # Nuevo dato para el resumen
+            'formato_incorrecto_eliminadas': len(filas_invalidas),
             'filas_escritas': filas_escritas
         }
         logger.info(f"Proceso de limpieza finalizado con éxito: {resumen_limpieza}")

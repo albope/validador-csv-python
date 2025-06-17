@@ -7,7 +7,7 @@ import threading
 import logging
 
 from .constants import *
-from validators import realizar_validacion_completa, crear_csv_limpio
+from validators import realizar_validacion_completa, crear_csv_limpio, leer_primeras_lineas
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +54,7 @@ class ValidadorCSVApp:
         
         title_theme_frame = customtkinter.CTkFrame(top_frame, fg_color="transparent")
         title_theme_frame.pack(fill=customtkinter.X, pady=(0, 5))
-
         customtkinter.CTkLabel(title_theme_frame, text="🧪 Validador de CSV con revisión avanzada", font=("Segoe UI", 20, "bold")).pack(side="left", pady=(5, 0))
-        
         theme_menu = customtkinter.CTkOptionMenu(title_theme_frame, values=["Light", "Dark", "System"], command=self.change_appearance_mode_event, width=100)
         theme_menu.pack(side="right", pady=(5,0), padx=5)
         customtkinter.CTkLabel(title_theme_frame, text="Tema:", font=("Segoe UI", 12)).pack(side="right", pady=(5,0))
@@ -67,11 +65,10 @@ class ValidadorCSVApp:
         boton_frame.pack(fill=customtkinter.X, pady=5)
         self.select_button = customtkinter.CTkButton(boton_frame, text="📂 Seleccionar y Validar", command=self._seleccionar_archivo)
         self.select_button.pack(side="left", padx=(0, 5))
-        
         self.clean_export_button = customtkinter.CTkButton(boton_frame, text="✨ Exportar CSV Limpio", command=self._exportar_csv_limpio, state="disabled")
         self.clean_export_button.pack(side="left", padx=5)
-
-        customtkinter.CTkButton(boton_frame, text="💾 Exportar informe", command=self._exportar_informe).pack(side="left", padx=5)
+        self.export_informe_button = customtkinter.CTkButton(boton_frame, text="💾 Exportar informe", command=self._exportar_informe, state="disabled")
+        self.export_informe_button.pack(side="left", padx=5)
         customtkinter.CTkButton(boton_frame, text="🔄 Limpiar todo", command=self._limpiar).pack(side="left", padx=5)
         
         options_frame = customtkinter.CTkFrame(top_frame)
@@ -83,22 +80,18 @@ class ValidadorCSVApp:
         self.var_ignore_case = customtkinter.BooleanVar(value=False)
 
         customtkinter.CTkCheckBox(options_frame, text="Detectar filas vacías", variable=self.var_check_vacias).grid(row=0, column=0, sticky='w', padx=10, pady=5)
-        
         dup_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         dup_frame.grid(row=0, column=1, sticky='w', padx=10, pady=5)
         customtkinter.CTkCheckBox(dup_frame, text="Detectar filas duplicadas", variable=self.var_check_duplicadas).pack(side='left')
         customtkinter.CTkCheckBox(dup_frame, text="(Ignorar Mayús/Minús)", variable=self.var_ignore_case).pack(side='left', padx=5)
-        
         header_check_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         header_check_frame.grid(row=1, column=0, columnspan=2, sticky='w', padx=5, pady=5)
         customtkinter.CTkCheckBox(header_check_frame, text="Validar cabecera (separada por comas):", variable=self.var_check_header, command=self._toggle_header_entry).pack(side='left')
         self.entry_header = customtkinter.CTkEntry(header_check_frame, width=400, state='disabled')
         self.entry_header.pack(side='left', padx=5, fill='x', expand=True)
-
         encoding_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         encoding_frame.grid(row=2, column=0, sticky='w', padx=5, pady=5)
         customtkinter.CTkLabel(encoding_frame, text="Codificación del archivo:").pack(side='left', padx=(5,0))
-        
         self.encoding_var = customtkinter.StringVar(value='utf-8')
         self.encoding_menu = customtkinter.CTkOptionMenu(encoding_frame, variable=self.encoding_var, values=['utf-8', 'latin-1', 'cp1252', 'iso-8859-1'])
         self.encoding_menu.pack(side='left', padx=5)
@@ -112,11 +105,23 @@ class ValidadorCSVApp:
         self.estadisticas_label = customtkinter.CTkLabel(top_frame, text="📊 Selecciona un archivo para ver las estadísticas", font=("Segoe UI", 12, "italic"))
         self.estadisticas_label.pack(fill=customtkinter.X, pady=5)
 
-        tree_frame = customtkinter.CTkFrame(main_frame)
-        tree_frame.pack(fill=customtkinter.BOTH, expand=True, padx=0, pady=(5,0))
+        self.tab_view = customtkinter.CTkTabview(main_frame, fg_color="transparent")
+        self.tab_view.pack(fill='both', expand=True, padx=0, pady=(5,0))
         
+        # --- CORRECCIÓN: Crear las pestañas ANTES de intentar seleccionarlas ---
+        self.tab_preview = self.tab_view.add("📄 Previsualización del Archivo")
+        self.tab_results = self.tab_view.add("📊 Resultados de Validación")
+        self.tab_view.set("📄 Previsualización del Archivo")
+
+        # --- Pestaña de Previsualización ---
+        self.preview_tree = ttk.Treeview(self.tab_preview, style='Treeview', show='headings')
+        self.preview_tree.pack(fill='both', expand=True, padx=2, pady=2)
+
+        # --- Pestaña de Resultados ---
+        results_tree_frame = customtkinter.CTkFrame(self.tab_results, fg_color="transparent")
+        results_tree_frame.pack(fill='both', expand=True, padx=2, pady=2)
         columns = ('linea', 'tipo_error', 'descripcion', 'contenido')
-        self.results_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', style='Treeview')
+        self.results_tree = ttk.Treeview(results_tree_frame, columns=columns, show='headings', style='Treeview')
         self.results_tree.heading('linea', text='Línea', command=lambda: self._sort_treeview_column('linea', False))
         self.results_tree.heading('tipo_error', text='Tipo de Error', command=lambda: self._sort_treeview_column('tipo_error', False))
         self.results_tree.heading('descripcion', text='Descripción', command=lambda: self._sort_treeview_column('descripcion', False))
@@ -125,8 +130,8 @@ class ValidadorCSVApp:
         self.results_tree.column('tipo_error', width=180, stretch=tk.NO)
         self.results_tree.column('descripcion', width=350)
         self.results_tree.column('contenido', width=500)
-        vsb = customtkinter.CTkScrollbar(tree_frame, command=self.results_tree.yview)
-        hsb = customtkinter.CTkScrollbar(tree_frame, command=self.results_tree.xview, orientation="horizontal")
+        vsb = customtkinter.CTkScrollbar(results_tree_frame, command=self.results_tree.yview)
+        hsb = customtkinter.CTkScrollbar(results_tree_frame, command=self.results_tree.xview, orientation="horizontal")
         self.results_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         vsb.pack(side='right', fill='y')
         hsb.pack(side='bottom', fill='x')
@@ -158,8 +163,11 @@ class ValidadorCSVApp:
         ruta = filedialog.askopenfilename(title="Selecciona un archivo CSV", filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")])
         if not ruta: logger.warning("El usuario canceló la selección de archivo."); return
         
-        logger.info(f"Archivo seleccionado por el usuario: {ruta}")
+        self._limpiar()
+        self.ruta_label.configure(text=f"📂 Archivo seleccionado:\n{ruta}")
         
+        self._mostrar_previsualizacion(ruta)
+
         expected_headers = [h.strip() for h in self.entry_header.get().split(',') if h]
         self.validation_options = {
             'encoding': self.encoding_var.get(),
@@ -171,11 +179,8 @@ class ValidadorCSVApp:
         }
         
         logger.info(f"Opciones de validación seleccionadas: {self.validation_options}")
-
         self.select_button.configure(state="disabled")
-        self.clean_export_button.configure(state="disabled")
-        self.ruta_label.configure(text=f"📂 Procesando archivo:\n{ruta}")
-        self._limpiar_resultados()
+        self.ruta_label.configure(text=f"📂 Validando archivo... (Previsualización disponible)")
         
         self.progressbar.pack(fill='x', padx=20, pady=(10,5))
         self.progressbar.start()
@@ -184,6 +189,34 @@ class ValidadorCSVApp:
         self.validation_thread = threading.Thread(target=self._worker_validacion, args=(ruta, self.validation_options))
         self.validation_thread.start()
         self.root.after(100, self._verificar_hilo)
+
+    def _mostrar_previsualizacion(self, ruta):
+        logger.info("Generando previsualización del archivo.")
+        self.tab_view.set("📄 Previsualización del Archivo")
+        
+        self.preview_tree.delete(*self.preview_tree.get_children())
+        self.preview_tree['columns'] = ()
+
+        preview_data = leer_primeras_lineas(ruta, 50, self.encoding_var.get())
+
+        if not preview_data.get('exito'):
+            messagebox.showerror("Error de Previsualización", f"No se pudo leer el archivo para previsualizar:\n{preview_data.get('error')}")
+            return
+
+        header = preview_data.get('header', [])
+        if not header:
+            logger.warning("El archivo seleccionado para previsualizar no tiene cabecera o está vacío.")
+            return
+
+        self.preview_tree['columns'] = header
+        for col in header:
+            self.preview_tree.heading(col, text=col, anchor='w')
+            self.preview_tree.column(col, width=150, anchor='w')
+        
+        for i, row in enumerate(preview_data.get('rows', [])):
+            if len(row) < len(header): row.extend([''] * (len(header) - len(row)))
+            elif len(row) > len(header): row = row[:len(header)]
+            self.preview_tree.insert('', 'end', values=row, iid=f"preview_row_{i}")
 
     def _worker_validacion(self, ruta_csv, options):
         logger.info(f"El hilo de trabajo ha comenzado la validación para: {ruta_csv}")
@@ -201,7 +234,9 @@ class ValidadorCSVApp:
             if self.resultados_validacion:
                 self.ruta_label.configure(text=f"📂 Archivo analizado:\n{self.resultados_validacion['ruta_archivo']}")
                 self.clean_export_button.configure(state="normal")
+                self.export_informe_button.configure(state="normal")
                 self._mostrar_resultados()
+                self.tab_view.set("📊 Resultados de Validación")
             else:
                 logger.error("El hilo de validación terminó pero no se encontraron resultados.")
                 messagebox.showerror("Error", "La validación terminó inesperadamente sin resultados.")
@@ -219,6 +254,7 @@ class ValidadorCSVApp:
             self.estadisticas_label.configure(text="📊 Error al procesar el archivo")
             messagebox.showerror("Error de Lectura", res['error_lectura'])
             self.clean_export_button.configure(state="disabled")
+            self.export_informe_button.configure(state="disabled")
             return
 
         stats_text = (f"📊 Total filas: {res.get('total_filas', 0)} | "
@@ -336,11 +372,15 @@ class ValidadorCSVApp:
 
     def _limpiar(self):
         logger.info("Limpiando la interfaz de usuario.")
-        self._limpiar_resultados()
+        self.preview_tree.delete(*self.preview_tree.get_children())
+        self.preview_tree['columns'] = ()
+        self.results_tree.delete(*self.results_tree.get_children())
+        self.tab_view.set("📄 Previsualización del Archivo")
         self.ruta_label.configure(text="📂 Archivo: (ninguno seleccionado)")
         self.estadisticas_label.configure(text="📊 Selecciona un archivo para ver las estadísticas")
         self.resultados_validacion = None
         self.clean_export_button.configure(state="disabled")
+        self.export_informe_button.configure(state="disabled")
         self.var_check_header.set(False)
         self.var_check_vacias.set(True)
         self.var_check_duplicadas.set(True)

@@ -6,7 +6,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# --- NUEVA FUNCIÓN ---
 def leer_primeras_lineas(ruta_csv, num_lineas, encoding):
     """
     Lee las primeras N líneas de un archivo CSV para previsualización.
@@ -18,9 +17,7 @@ def leer_primeras_lineas(ruta_csv, num_lineas, encoding):
     try:
         with open(ruta_csv, 'r', newline='', encoding=encoding) as f:
             lector = csv.reader(f)
-            # Leer la cabecera
             header = next(lector, [])
-            # Leer las siguientes N-1 filas
             for i, row in enumerate(lector):
                 if i >= num_lineas - 1:
                     break
@@ -30,20 +27,23 @@ def leer_primeras_lineas(ruta_csv, num_lineas, encoding):
         logger.error(f"Error al previsualizar el archivo {ruta_csv}: {e}")
         return {'exito': False, 'error': str(e)}
 
-
 def realizar_validacion_completa(ruta_csv, options):
     """
-    Lógica de validación pura que ahora usa la codificación proporcionada.
+    Lógica de validación pura que ahora incluye la comprobación de unicidad de columna.
     """
     logger.info(f"Iniciando validación para el fichero: {ruta_csv}")
     
     resultados = {
         'ruta_archivo': ruta_csv, 'total_filas': 0, 'num_columnas_esperadas': None,
-        'filas_invalidas': [], 'celdas_con_saltos': [], 'error_lectura': None,
-        'filas_vacias': [], 'filas_duplicadas': {}, 'error_header': None
+        'cabecera': [], 'filas_invalidas': [], 'celdas_con_saltos': [], 
+        'error_lectura': None, 'filas_vacias': [], 'filas_duplicadas': {}, 
+        'error_header': None, 'errores_de_unicidad': {}
     }
     seen_rows_and_lines = {}
     
+    unique_column_values = {}
+    unique_col_index = -1
+
     encoding = options.get('encoding', 'utf-8')
     logger.info(f"Intentando leer el fichero con la codificación: {encoding}")
 
@@ -54,19 +54,27 @@ def realizar_validacion_completa(ruta_csv, options):
             try:
                 primera_fila = next(lector)
                 resultados['total_filas'] = 1
+                resultados['cabecera'] = primera_fila
                 
                 header_to_validate = primera_fila
-                expected_headers = options['expected_headers']
-                if options['check_header'] and expected_headers:
-                    if options['ignore_case']:
+                expected_headers = options.get('expected_headers', [])
+                if options.get('check_header') and expected_headers:
+                    if options.get('ignore_case'):
                         header_to_validate = [h.lower().strip() for h in header_to_validate]
                         expected_headers = [h.lower().strip() for h in expected_headers]
                     
                     if header_to_validate != expected_headers:
                         resultados['error_header'] = f"La cabecera no coincide.\nSe esperaba: {options['expected_headers']}\nSe encontró: {primera_fila}"
                 
+                if options.get('check_uniqueness') and options.get('unique_column_name'):
+                    try:
+                        unique_col_index = primera_fila.index(options['unique_column_name'])
+                        logger.info(f"Se comprobará la unicidad de la columna '{options['unique_column_name']}' en el índice {unique_col_index}.")
+                    except ValueError:
+                        logger.warning(f"La columna de unicidad '{options['unique_column_name']}' no se encontró en la cabecera.")
+                
                 resultados['num_columnas_esperadas'] = len(primera_fila)
-                _validar_fila_interna(primera_fila, 1, resultados, options, seen_rows_and_lines)
+                _validar_fila_interna(primera_fila, 1, resultados, options, seen_rows_and_lines, unique_col_index, unique_column_values)
 
             except StopIteration:
                 logger.warning(f"El fichero {ruta_csv} está vacío o no tiene contenido.")
@@ -74,7 +82,7 @@ def realizar_validacion_completa(ruta_csv, options):
 
             for i, fila in enumerate(lector, start=2):
                 resultados['total_filas'] += 1
-                _validar_fila_interna(fila, i, resultados, options, seen_rows_and_lines)
+                _validar_fila_interna(fila, i, resultados, options, seen_rows_and_lines, unique_col_index, unique_column_values)
 
     except FileNotFoundError:
         logger.error(f"Error: Fichero no encontrado en la ruta {ruta_csv}")
@@ -87,22 +95,27 @@ def realizar_validacion_completa(ruta_csv, options):
         logger.critical("Ha ocurrido una excepción no controlada durante la validación del CSV.", exc_info=True)
         resultados['error_lectura'] = "Ha ocurrido un error crítico. Revisa 'validator.log' para detalles."
     
-    if options['check_duplicadas']:
+    if options.get('check_duplicadas'):
         for row, lines in seen_rows_and_lines.items():
             if len(lines) > 1:
                 resultados['filas_duplicadas'][row] = sorted(lines)
+    
+    if unique_col_index != -1:
+        for value, lines in unique_column_values.items():
+            if len(lines) > 1:
+                resultados['errores_de_unicidad'][value] = sorted(lines)
             
     logger.info("Validación finalizada. Devolviendo resultados.")
     return resultados
 
-def _validar_fila_interna(fila, num_fila, resultados, options, seen_rows_and_lines):
+def _validar_fila_interna(fila, num_fila, resultados, options, seen_rows_and_lines, unique_col_index, unique_column_values):
     """Valida una única fila aplicando las reglas activas."""
     
     if len(fila) != resultados['num_columnas_esperadas']:
         resultados['filas_invalidas'].append((num_fila, len(fila), fila))
         return
 
-    if options['check_vacias'] and not any(field.strip() for field in fila):
+    if options.get('check_vacias') and not any(field.strip() for field in fila):
         resultados['filas_vacias'].append(num_fila)
         return
     
@@ -110,9 +123,19 @@ def _validar_fila_interna(fila, num_fila, resultados, options, seen_rows_and_lin
         if '\n' in campo or '\r' in campo:
             resultados['celdas_con_saltos'].append((num_fila, j, campo))
     
-    if options['check_duplicadas']:
+    if num_fila > 1 and unique_col_index != -1 and unique_col_index < len(fila):
+        valor_celda = fila[unique_col_index].strip()
+        if options.get('ignore_case'):
+            valor_celda = valor_celda.lower()
+        
+        if valor_celda:
+            if valor_celda not in unique_column_values:
+                unique_column_values[valor_celda] = []
+            unique_column_values[valor_celda].append(num_fila)
+
+    if options.get('check_duplicadas'):
         normalized_fila = [field.strip() for field in fila]
-        if options['ignore_case']:
+        if options.get('ignore_case'):
             normalized_fila = [field.lower() for field in normalized_fila]
         
         row_tuple = tuple(normalized_fila)
@@ -123,8 +146,7 @@ def _validar_fila_interna(fila, num_fila, resultados, options, seen_rows_and_lin
 
 def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options):
     """
-    Crea un nuevo archivo CSV limpio, omitiendo filas vacías, duplicadas o con
-    formato incorrecto, y recortando espacios en blanco en todas las celdas.
+    Crea un nuevo archivo CSV limpio.
     """
     logger.info(f"Iniciando proceso de limpieza. Origen: {ruta_original}, Destino: {ruta_destino}")
     

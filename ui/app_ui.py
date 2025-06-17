@@ -228,21 +228,16 @@ class ValidadorCSVApp:
                       f"❌ Duplicadas: {len(res.get('filas_duplicadas', {}))}")
         self.estadisticas_label.configure(text=stats_text)
         
-        # --- CORRECCIÓN: Lógica para llenar la tabla de resultados ---
         if res.get('error_header'):
             self.results_tree.insert('', 'end', values=('-', 'Cabecera', res['error_header'], ''))
-
         for fila_num, num_cols, contenido in res.get('filas_invalidas', []):
             desc = f"Se esperaban {res.get('num_columnas_esperadas')} columnas, pero tiene {num_cols}"
             self.results_tree.insert('', 'end', values=(fila_num, 'Nº de Columnas', desc, str(contenido)))
-
         for fila_num, col_num, contenido in res.get('celdas_con_saltos', []):
             desc = f"Salto de línea encontrado en la columna {col_num}"
             self.results_tree.insert('', 'end', values=(fila_num, 'Salto de Línea', desc, contenido.replace('\n', r'{\n}')))
-
         for fila_num in res.get('filas_vacias', []):
             self.results_tree.insert('', 'end', values=(fila_num, 'Fila Vacía', 'La fila no contiene datos', ''))
-
         for row_tuple, line_numbers in res.get('filas_duplicadas', {}).items():
             line_str = ', '.join(map(str, line_numbers))
             desc = f"Aparece en las líneas: {line_str}"
@@ -264,31 +259,25 @@ class ValidadorCSVApp:
                 f.write(f"Archivo: {res['ruta_archivo']}\n\n")
                 f.write(f"RESUMEN ESTADÍSTICO:\n{self.estadisticas_label.cget('text')}\n\n")
                 f.write("-" * 80 + "\nDETALLE DE ERRORES\n" + "-"*80 + "\n\n")
-
                 if res.get('error_header'):
                     f.write(f"--- ERROR DE CABECERA ---\n{res['error_header']}\n\n")
-                
                 if res.get('filas_invalidas'):
                     f.write("--- ERRORES DE NÚMERO DE COLUMNAS ---\n")
                     for fn, nc, co in res['filas_invalidas']:
                         f.write(f"Línea {fn}: Esperadas {res.get('num_columnas_esperadas')} cols, encontradas {nc}. Contenido: {co}\n")
                     f.write("\n")
-
                 if res.get('celdas_con_saltos'):
                     f.write("--- ERRORES DE SALTOS DE LÍNEA ---\n")
                     for fn, cn, co in res['celdas_con_saltos']:
                         f.write(f"Línea {fn}, Columna {cn}: Contenido con salto: {co.replace(chr(10), '{LF}')}\n")
                     f.write("\n")
-
                 if res.get('filas_vacias'):
                     f.write(f"--- FILAS VACÍAS ENCONTRADAS ---\nLíneas: {', '.join(map(str, res['filas_vacias']))}\n\n")
-
                 if res.get('filas_duplicadas'):
                     f.write("--- GRUPOS DE FILAS DUPLICADAS ---\n")
                     for rt, lns in res['filas_duplicadas'].items():
                         f.write(f"Contenido duplicado en líneas {', '.join(map(str, lns))}:\n   {list(rt)}\n")
                     f.write("\n")
-                    
             messagebox.showinfo("Exportado", f"Informe de errores guardado en:\n{ruta_guardado}")
             logger.info("Informe exportado con éxito.")
         except Exception as e:
@@ -296,10 +285,6 @@ class ValidadorCSVApp:
             messagebox.showerror("Error al exportar", f"No se pudo guardar el archivo. Revise 'validator.log' para detalles.")
 
     def _exportar_csv_limpio(self):
-        """
-        Abre un diálogo para guardar un nuevo CSV limpio, basado en los resultados
-        de la última validación.
-        """
         if not self.resultados_validacion:
             messagebox.showwarning("Sin resultados", "Primero debes realizar una validación.")
             return
@@ -308,9 +293,7 @@ class ValidadorCSVApp:
         if not ruta_original:
             messagebox.showerror("Error", "No se encontró la ruta del archivo original.")
             return
-
-        # Sugerir un nombre de archivo por defecto
-        # Tomamos el nombre del archivo original y le añadimos "_limpio"
+        
         import os
         base, ext = os.path.splitext(os.path.basename(ruta_original))
         default_filename = f"{base}_limpio.csv"
@@ -321,12 +304,10 @@ class ValidadorCSVApp:
             defaultextension=".csv",
             filetypes=[("Archivos CSV", "*.csv")]
         )
-
         if not ruta_destino:
             logger.warning("El usuario canceló la exportación del CSV limpio.")
             return
 
-        # Realizar la limpieza en un hilo para no bloquear la UI
         thread = threading.Thread(
             target=self._worker_limpieza,
             args=(ruta_original, ruta_destino, self.resultados_validacion, self.validation_options)
@@ -334,7 +315,6 @@ class ValidadorCSVApp:
         thread.start()
 
     def _worker_limpieza(self, ruta_original, ruta_destino, resultados_validacion, options):
-        """Hilo de trabajo que llama a la función de limpieza y muestra el resultado."""
         logger.info("Iniciando el hilo de trabajo para la limpieza del CSV.")
         resumen = crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options)
         
@@ -343,6 +323,7 @@ class ValidadorCSVApp:
                 f"¡Archivo CSV limpiado con éxito!\n\n"
                 f"Ruta: {ruta_destino}\n"
                 f"-------------------------------------\n"
+                f"Filas con formato incorrecto eliminadas: {resumen.get('formato_incorrecto_eliminadas', 0)}\n"
                 f"Filas vacías eliminadas: {resumen.get('vacias_eliminadas', 0)}\n"
                 f"Filas duplicadas eliminadas: {resumen.get('duplicados_eliminados', 0)}\n"
                 f"Total de filas escritas en el nuevo archivo: {resumen.get('filas_escritas', 0)}"
@@ -359,7 +340,7 @@ class ValidadorCSVApp:
         self.ruta_label.configure(text="📂 Archivo: (ninguno seleccionado)")
         self.estadisticas_label.configure(text="📊 Selecciona un archivo para ver las estadísticas")
         self.resultados_validacion = None
-        self.clean_export_button.configure(state="disabled") # Deshabilitar al limpiar
+        self.clean_export_button.configure(state="disabled")
         self.var_check_header.set(False)
         self.var_check_vacias.set(True)
         self.var_check_duplicadas.set(True)

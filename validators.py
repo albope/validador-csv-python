@@ -6,11 +6,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# --- Funciones de Validación de Tipos (si se implementan en el futuro) ---
-# ...
-
 def realizar_validacion_completa(ruta_csv, options):
-    """Lógica de validación pura que ahora usa la codificación proporcionada."""
+    """
+    Lógica de validación pura que ahora usa la codificación proporcionada.
+    """
     logger.info(f"Iniciando validación para el fichero: {ruta_csv}")
     
     resultados = {
@@ -97,19 +96,23 @@ def _validar_fila_interna(fila, num_fila, resultados, options, seen_rows_and_lin
             seen_rows_and_lines[row_tuple] = []
         seen_rows_and_lines[row_tuple].append(num_fila)
 
-# --- NUEVA FUNCIÓN ---
 def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options):
     """
-    Crea un nuevo archivo CSV limpio, omitiendo filas vacías/duplicadas y
-    recortando espacios en blanco en todas las celdas.
+    Crea un nuevo archivo CSV limpio, omitiendo filas vacías, duplicadas o con
+    formato incorrecto, y recortando espacios en blanco en todas las celdas.
     """
     logger.info(f"Iniciando proceso de limpieza. Origen: {ruta_original}, Destino: {ruta_destino}")
     
     lineas_a_omitir = set()
     
-    # Añadir las líneas vacías al conjunto de omisión
+    # Añadir las líneas vacías
     filas_vacias = resultados_validacion.get('filas_vacias', [])
     lineas_a_omitir.update(filas_vacias)
+    
+    # --- CORRECCIÓN: Añadir las líneas con número de columnas incorrecto ---
+    filas_invalidas = resultados_validacion.get('filas_invalidas', [])
+    for linea_invalida, _, _ in filas_invalidas:
+        lineas_a_omitir.add(linea_invalida)
     
     # Añadir las líneas duplicadas (todas menos la primera aparición)
     filas_duplicadas = resultados_validacion.get('filas_duplicadas', {})
@@ -131,7 +134,6 @@ def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options
             
             for i, fila in enumerate(lector, start=1):
                 if i not in lineas_a_omitir:
-                    # Limpiar espacios en blanco de cada celda
                     fila_limpia = [celda.strip() for celda in fila]
                     escritor.writerow(fila_limpia)
                     filas_escritas += 1
@@ -140,6 +142,7 @@ def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options
             'exito': True,
             'vacias_eliminadas': len(filas_vacias),
             'duplicados_eliminados': duplicados_eliminados,
+            'formato_incorrecto_eliminadas': len(filas_invalidas), # Nuevo dato para el resumen
             'filas_escritas': filas_escritas
         }
         logger.info(f"Proceso de limpieza finalizado con éxito: {resumen_limpieza}")
@@ -148,4 +151,3 @@ def crear_csv_limpio(ruta_original, ruta_destino, resultados_validacion, options
     except Exception as e:
         logger.error("Error durante el proceso de creación del CSV limpio.", exc_info=True)
         return {'exito': False, 'error': str(e)}
-

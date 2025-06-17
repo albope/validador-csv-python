@@ -23,9 +23,7 @@ class ValidadorCSVApp:
         self.resultados_validacion = None
         self.ruta_archivo_actual = None
         
-        # --- NUEVO: Creación del menú ---
         self._crear_menu()
-        
         self._configure_treeview_style()
         self._crear_widgets()
         self._update_treeview_theme(customtkinter.get_appearance_mode())
@@ -39,9 +37,8 @@ class ValidadorCSVApp:
         """Crea la barra de menú superior de la aplicación."""
         self.menubar = tk.Menu(self.root)
         
-        # Menú de Ayuda
         help_menu = tk.Menu(self.menubar, tearoff=0)
-        help_menu.add_command(label="Manual de Usuario (Próximamente)", state="disabled")
+        help_menu.add_command(label="Manual de Usuario", command=self._abrir_manual_usuario)
         help_menu.add_separator()
         help_menu.add_command(label="Acerca de...", command=self._abrir_ventana_acerca_de)
         
@@ -50,28 +47,22 @@ class ValidadorCSVApp:
 
     def _abrir_ventana_acerca_de(self):
         """Abre la ventana 'Acerca de...'."""
-        
-        # Crear la ventana emergente
         about_window = customtkinter.CTkToplevel(self.root)
         about_window.title("Acerca de Validador CSV")
         about_window.geometry("400x300")
-        about_window.transient(self.root) # Mantener por encima de la principal
-        about_window.grab_set() # Bloquear la ventana principal
+        about_window.transient(self.root)
+        about_window.grab_set()
         about_window.resizable(False, False)
 
         main_frame = customtkinter.CTkFrame(about_window, fg_color="transparent")
         main_frame.pack(pady=20, padx=20, fill="both", expand=True)
 
-        # Icono y Título
         customtkinter.CTkLabel(main_frame, text="🧪", font=("Segoe UI", 48)).pack()
         customtkinter.CTkLabel(main_frame, text="Validador CSV Profesional", font=("Segoe UI", 16, "bold")).pack(pady=(0, 5))
-        
-        # Información
         customtkinter.CTkLabel(main_frame, text="Versión 1.0.0", font=("Segoe UI", 10)).pack()
         customtkinter.CTkLabel(main_frame, text="Herramienta para la validación y limpieza de archivos CSV.", wraplength=350).pack(pady=10)
         customtkinter.CTkLabel(main_frame, text="Desarrollado por Alberto Bort", font=("Segoe UI", 10, "italic")).pack()
 
-        # Enlace a GitHub
         link = customtkinter.CTkLabel(main_frame, text="Ver en GitHub", text_color="#3478d9", cursor="hand2", font=("Segoe UI", 10, "underline"))
         link.pack(pady=10)
         link.bind("<Button-1>", lambda e: webbrowser.open_new_tab("https://github.com/albope/validador-csv-python"))
@@ -79,6 +70,91 @@ class ValidadorCSVApp:
         ok_button = customtkinter.CTkButton(main_frame, text="Aceptar", command=about_window.destroy, width=100)
         ok_button.pack(pady=10)
 
+    def _abrir_manual_usuario(self):
+        """Abre una ventana con el manual de usuario completo."""
+        help_window = customtkinter.CTkToplevel(self.root)
+        help_window.title("Manual de Usuario")
+        help_window.geometry("700x600")
+        help_window.transient(self.root)
+        help_window.grab_set()
+
+        textbox = customtkinter.CTkTextbox(help_window, wrap="word", font=("Segoe UI", 13), corner_radius=0)
+        textbox.pack(expand=True, fill="both")
+        
+        manual_text = """
+# 📘 Manual de Usuario - Validador CSV Profesional
+
+Bienvenido a la guía de usuario. Aquí encontrarás una explicación detallada de todas las funcionalidades de la aplicación.
+
+---
+
+### **1. Flujo de Trabajo Básico**
+
+El proceso para validar un archivo es simple:
+
+1.  **Seleccionar Archivo:** Usa el botón **"📂 Seleccionar Archivo"** para abrir un explorador y elegir tu fichero `.csv`. Al seleccionarlo, verás una previsualización de las primeras 50 filas en la pestaña **"📄 Previsualización del Archivo"**. Esto te permite confirmar que es el fichero correcto y que la codificación es la adecuada.
+
+2.  **Configurar Opciones:** Antes de validar, puedes ajustar las reglas en la sección de **"Opciones de Validación Avanzada"**.
+
+3.  **Iniciar Validación:** Pulsa el botón **"🚀 Iniciar Validación"**. La aplicación procesará el archivo completo en segundo plano. La barra de progreso se activará y los botones se deshabilitarán.
+
+4.  **Revisar Resultados:** Una vez finalizado, la aplicación cambiará automáticamente a la pestaña **"📊 Resultados de Validación"**, donde verás una tabla con todos los errores encontrados. La barra de estadísticas superior te dará un resumen rápido.
+
+5.  **Exportar:** Puedes usar **"✨ Exportar CSV Limpio"** para guardar una versión corregida del archivo o **"💾 Exportar Informe"** para guardar un resumen de los errores en un fichero de texto.
+
+---
+
+### **2. Opciones de Validación Avanzada**
+
+#### **Codificación del archivo**
+- **Qué es:** Define el formato de caracteres de tu archivo.
+- **Cuándo usarlo:** Si al previsualizar o validar ves caracteres extraños (como `Ã³` en lugar de `ó`), es muy probable que la codificación sea incorrecta. El estándar es `utf-8`, pero archivos generados por programas más antiguos en Windows suelen usar `latin-1` o `cp1252`. Prueba con esas opciones.
+
+#### **Detectar filas vacías**
+- **Activado (por defecto):** Reportará cualquier fila que no contenga ningún dato.
+
+#### **Detectar filas duplicadas**
+- **Activado (por defecto):** Compara cada fila con las anteriores para encontrar duplicados exactos.
+- **(Ignorar Mayús/Minús):** Si marcas esta casilla, la detección de duplicados no distinguirá entre mayúsculas y minúsculas (ej. "Madrid" será igual que "madrid"). Muy útil para datos introducidos manualmente.
+
+#### **Validar cabecera**
+- **Qué es:** Te permite verificar que la primera fila del CSV (la cabecera) coincide exactamente con una lista de columnas que tú esperas.
+- **Cómo usarlo:** Marca la casilla y escribe los nombres de las columnas que esperas en el campo de texto, **separados por comas**. Ejemplo: `ID,Nombre,Email,Fecha_Registro`
+
+#### **Verificar unicidad en columna**
+- **Qué es:** Asegura que todos los valores en una columna específica sean únicos (no haya repetidos). Ideal para columnas de ID, email, etc.
+- **Cómo usarlo:**
+    1. Selecciona un archivo.
+    2. Marca la casilla "Verificar unicidad...".
+    3. Selecciona del menú desplegable la columna que quieres comprobar.
+    4. Inicia la validación. El programa reportará cualquier valor que aparezca más de una vez en esa columna.
+
+---
+
+### **3. La Tabla de Resultados**
+
+La tabla te muestra todos los errores de forma organizada.
+- **Línea:** El número de línea en el archivo original donde se encontró el error.
+- **Tipo de Error:** La categoría del problema (Nº de Columnas, Fila Duplicada, Error de Unicidad, etc.).
+- **Descripción:** Un mensaje que explica el error.
+- **Contenido de la Fila:** La fila completa donde se encontró el error, para darte contexto.
+
+💡 **Consejo:** ¡Puedes hacer clic en las cabeceras de las columnas ("Línea", "Tipo de Error", etc.) para ordenar los resultados!
+
+---
+
+### **4. Exportación**
+
+- **✨ Exportar CSV Limpio:** Esta es la función más potente. Crea un nuevo archivo `.csv` aplicando las siguientes correcciones automáticas:
+    - **Elimina** filas con un número de columnas incorrecto.
+    - **Elimina** filas vacías.
+    - **Elimina** filas duplicadas (conservando siempre la primera aparición).
+    - **Recorta** los espacios en blanco al inicio y al final de cada celda en todo el archivo.
+
+- **💾 Exportar Informe:** Guarda un archivo de texto (`.txt`) con el resumen estadístico y la lista detallada de todos los errores encontrados, perfecto para documentar o compartir los problemas.
+"""
+        textbox.insert("1.0", manual_text)
+        textbox.configure(state="disabled") # Hacerlo de solo lectura
 
     def _configure_treeview_style(self):
         self.style = ttk.Style()
@@ -128,7 +204,6 @@ class ValidadorCSVApp:
         options_frame = customtkinter.CTkFrame(top_frame)
         options_frame.pack(padx=0, pady=10, fill='x')
 
-        # --- CORRECCIÓN: Definir todas las variables de control ANTES de usar los widgets ---
         self.var_check_vacias = customtkinter.BooleanVar(value=True)
         self.var_check_duplicadas = customtkinter.BooleanVar(value=True)
         self.var_check_header = customtkinter.BooleanVar(value=False)
@@ -136,7 +211,6 @@ class ValidadorCSVApp:
         self.var_check_uniqueness = customtkinter.BooleanVar(value=False)
         self.encoding_var = customtkinter.StringVar(value='utf-8')
         self.unique_column_var = customtkinter.StringVar(value="(Seleccione archivo)")
-        # --- FIN DE LA CORRECCIÓN ---
         
         customtkinter.CTkCheckBox(options_frame, text="Detectar filas vacías", variable=self.var_check_vacias).grid(row=0, column=0, sticky='w', padx=10, pady=5)
         
@@ -203,7 +277,7 @@ class ValidadorCSVApp:
         hsb.pack(side='bottom', fill='x')
         self.results_tree.pack(side='left', fill='both', expand=True)
 
-        # --- Creación de los Tooltips ---
+        # Creación de los Tooltips
         ToolTip(chk_ign_case, "Si se marca, no se distinguirá entre mayúsculas y minúsculas \nal detectar duplicados o validar la cabecera.")
         ToolTip(self.encoding_menu, "Selecciona la codificación de caracteres de tu archivo.\nUsa 'latin-1' o 'cp1252' si tienes problemas con tildes o eñes.")
         ToolTip(chk_unicidad, "Activa esta opción para comprobar que todos los valores en la\ncolumna seleccionada a la derecha son únicos.")

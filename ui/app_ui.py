@@ -5,8 +5,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading
 import logging
+import webbrowser
 
 from .constants import *
+from .tooltip import ToolTip
 from validators import realizar_validacion_completa, crear_csv_limpio, leer_primeras_lineas
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,9 @@ class ValidadorCSVApp:
         self.resultados_validacion = None
         self.ruta_archivo_actual = None
         
+        # --- NUEVO: Creación del menú ---
+        self._crear_menu()
+        
         self._configure_treeview_style()
         self._crear_widgets()
         self._update_treeview_theme(customtkinter.get_appearance_mode())
@@ -29,6 +34,51 @@ class ValidadorCSVApp:
         self.root.title("🧪 Validador CSV Profesional")
         self.root.geometry("1100x900")
         self.root.minsize(800, 700)
+
+    def _crear_menu(self):
+        """Crea la barra de menú superior de la aplicación."""
+        self.menubar = tk.Menu(self.root)
+        
+        # Menú de Ayuda
+        help_menu = tk.Menu(self.menubar, tearoff=0)
+        help_menu.add_command(label="Manual de Usuario (Próximamente)", state="disabled")
+        help_menu.add_separator()
+        help_menu.add_command(label="Acerca de...", command=self._abrir_ventana_acerca_de)
+        
+        self.menubar.add_cascade(label="Ayuda", menu=help_menu)
+        self.root.config(menu=self.menubar)
+
+    def _abrir_ventana_acerca_de(self):
+        """Abre la ventana 'Acerca de...'."""
+        
+        # Crear la ventana emergente
+        about_window = customtkinter.CTkToplevel(self.root)
+        about_window.title("Acerca de Validador CSV")
+        about_window.geometry("400x300")
+        about_window.transient(self.root) # Mantener por encima de la principal
+        about_window.grab_set() # Bloquear la ventana principal
+        about_window.resizable(False, False)
+
+        main_frame = customtkinter.CTkFrame(about_window, fg_color="transparent")
+        main_frame.pack(pady=20, padx=20, fill="both", expand=True)
+
+        # Icono y Título
+        customtkinter.CTkLabel(main_frame, text="🧪", font=("Segoe UI", 48)).pack()
+        customtkinter.CTkLabel(main_frame, text="Validador CSV Profesional", font=("Segoe UI", 16, "bold")).pack(pady=(0, 5))
+        
+        # Información
+        customtkinter.CTkLabel(main_frame, text="Versión 1.0.0", font=("Segoe UI", 10)).pack()
+        customtkinter.CTkLabel(main_frame, text="Herramienta para la validación y limpieza de archivos CSV.", wraplength=350).pack(pady=10)
+        customtkinter.CTkLabel(main_frame, text="Desarrollado por Alberto Bort", font=("Segoe UI", 10, "italic")).pack()
+
+        # Enlace a GitHub
+        link = customtkinter.CTkLabel(main_frame, text="Ver en GitHub", text_color="#3478d9", cursor="hand2", font=("Segoe UI", 10, "underline"))
+        link.pack(pady=10)
+        link.bind("<Button-1>", lambda e: webbrowser.open_new_tab("https://github.com/albope/validador-csv-python"))
+        
+        ok_button = customtkinter.CTkButton(main_frame, text="Aceptar", command=about_window.destroy, width=100)
+        ok_button.pack(pady=10)
+
 
     def _configure_treeview_style(self):
         self.style = ttk.Style()
@@ -65,10 +115,8 @@ class ValidadorCSVApp:
         boton_frame = customtkinter.CTkFrame(top_frame, fg_color="transparent")
         boton_frame.pack(fill=customtkinter.X, pady=5)
         
-        # --- CORRECCIÓN: Asignar el botón a self.select_button ---
         self.select_button = customtkinter.CTkButton(boton_frame, text="📂 Seleccionar Archivo", command=self._seleccionar_archivo)
         self.select_button.pack(side="left", padx=(0, 5))
-        
         self.validate_button = customtkinter.CTkButton(boton_frame, text="🚀 Iniciar Validación", command=self._iniciar_validacion, state="disabled")
         self.validate_button.pack(side="left", padx=5)
         self.clean_export_button = customtkinter.CTkButton(boton_frame, text="✨ Exportar CSV Limpio", command=self._exportar_csv_limpio, state="disabled")
@@ -80,33 +128,41 @@ class ValidadorCSVApp:
         options_frame = customtkinter.CTkFrame(top_frame)
         options_frame.pack(padx=0, pady=10, fill='x')
 
+        # --- CORRECCIÓN: Definir todas las variables de control ANTES de usar los widgets ---
         self.var_check_vacias = customtkinter.BooleanVar(value=True)
         self.var_check_duplicadas = customtkinter.BooleanVar(value=True)
         self.var_check_header = customtkinter.BooleanVar(value=False)
         self.var_ignore_case = customtkinter.BooleanVar(value=False)
         self.var_check_uniqueness = customtkinter.BooleanVar(value=False)
-
+        self.encoding_var = customtkinter.StringVar(value='utf-8')
+        self.unique_column_var = customtkinter.StringVar(value="(Seleccione archivo)")
+        # --- FIN DE LA CORRECCIÓN ---
+        
         customtkinter.CTkCheckBox(options_frame, text="Detectar filas vacías", variable=self.var_check_vacias).grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        
         dup_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         dup_frame.grid(row=0, column=1, sticky='w', padx=10, pady=5)
-        customtkinter.CTkCheckBox(dup_frame, text="Detectar filas duplicadas", variable=self.var_check_duplicadas).pack(side='left')
-        customtkinter.CTkCheckBox(dup_frame, text="(Ignorar Mayús/Minús)", variable=self.var_ignore_case).pack(side='left', padx=5)
+        chk_duplicados = customtkinter.CTkCheckBox(dup_frame, text="Detectar filas duplicadas", variable=self.var_check_duplicadas)
+        chk_duplicados.pack(side='left')
+        chk_ign_case = customtkinter.CTkCheckBox(dup_frame, text="(Ignorar Mayús/Minús)", variable=self.var_ignore_case)
+        chk_ign_case.pack(side='left', padx=5)
+        
         header_check_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         header_check_frame.grid(row=1, column=0, columnspan=2, sticky='w', padx=5, pady=5)
         customtkinter.CTkCheckBox(header_check_frame, text="Validar cabecera (separada por comas):", variable=self.var_check_header, command=self._toggle_header_entry).pack(side='left')
         self.entry_header = customtkinter.CTkEntry(header_check_frame, width=400, state='disabled')
         self.entry_header.pack(side='left', padx=5, fill='x', expand=True)
+        
         encoding_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         encoding_frame.grid(row=2, column=0, sticky='w', padx=5, pady=5)
         customtkinter.CTkLabel(encoding_frame, text="Codificación del archivo:").pack(side='left', padx=(5,0))
-        self.encoding_var = customtkinter.StringVar(value='utf-8')
         self.encoding_menu = customtkinter.CTkOptionMenu(encoding_frame, variable=self.encoding_var, values=['utf-8', 'latin-1', 'cp1252', 'iso-8859-1'])
         self.encoding_menu.pack(side='left', padx=5)
         
         uniqueness_frame = customtkinter.CTkFrame(options_frame, fg_color="transparent")
         uniqueness_frame.grid(row=2, column=1, sticky='w', padx=10, pady=5)
-        customtkinter.CTkCheckBox(uniqueness_frame, text="Verificar unicidad en columna:", variable=self.var_check_uniqueness).pack(side='left')
-        self.unique_column_var = customtkinter.StringVar(value="(Seleccione archivo)")
+        chk_unicidad = customtkinter.CTkCheckBox(uniqueness_frame, text="Verificar unicidad en columna:", variable=self.var_check_uniqueness)
+        chk_unicidad.pack(side='left')
         self.unique_column_menu = customtkinter.CTkOptionMenu(uniqueness_frame, variable=self.unique_column_var, values=["(Seleccione archivo)"], state="disabled")
         self.unique_column_menu.pack(side='left', padx=5)
 
@@ -146,6 +202,13 @@ class ValidadorCSVApp:
         vsb.pack(side='right', fill='y')
         hsb.pack(side='bottom', fill='x')
         self.results_tree.pack(side='left', fill='both', expand=True)
+
+        # --- Creación de los Tooltips ---
+        ToolTip(chk_ign_case, "Si se marca, no se distinguirá entre mayúsculas y minúsculas \nal detectar duplicados o validar la cabecera.")
+        ToolTip(self.encoding_menu, "Selecciona la codificación de caracteres de tu archivo.\nUsa 'latin-1' o 'cp1252' si tienes problemas con tildes o eñes.")
+        ToolTip(chk_unicidad, "Activa esta opción para comprobar que todos los valores en la\ncolumna seleccionada a la derecha son únicos.")
+        ToolTip(self.clean_export_button, "Crea un nuevo archivo CSV corrigiendo errores automáticamente:\n- Elimina filas vacías.\n- Elimina filas con un número de columnas incorrecto.\n- Elimina duplicados (conservando la primera aparición).\n- Recorta espacios en blanco de todas las celdas.")
+
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)
